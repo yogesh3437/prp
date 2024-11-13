@@ -1,0 +1,227 @@
+
+// src/app/services/auth.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
+  private baseUrl = 'http://localhost:8080/api/auth';
+
+  constructor(private http: HttpClient) {}
+
+  login(email: string, password: string): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/login`, { email, password });
+  }
+
+  saveToken(token: string) {
+    localStorage.setItem('jwt', token);
+  }
+
+  getToken() {
+    return localStorage.getItem('jwt');
+  }
+
+  isLoggedIn(): boolean {
+    return this.getToken() !== null;
+  }
+
+  logout() {
+    localStorage.removeItem('jwt');
+  }
+  
+  // Role-based methods
+  isAdmin(): boolean {
+    const roles = JSON.parse(localStorage.getItem('roles') || '[]');
+    return roles.includes('ROLE_ADMIN');
+  }
+
+  isPhysician(): boolean {
+    const roles = JSON.parse(localStorage.getItem('roles') || '[]');
+    return roles.includes('ROLE_PHYSICIAN');
+  }
+
+  isPatient(): boolean {
+    const roles = JSON.parse(localStorage.getItem('roles') || '[]');
+    return roles.includes('ROLE_PATIENT');
+  }
+}
+
+*****************************************************************************************
+
+// src/app/guards/admin.guard.ts
+import { Injectable } from '@angular/core';
+import { CanActivate, Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AdminGuard implements CanActivate {
+
+  constructor(private authService: AuthService, private router: Router) {}
+
+  canActivate(): boolean {
+    if (this.authService.isAdmin()) {
+      return true;
+    } else {
+      this.router.navigate(['/']);
+      return false;
+    }
+  }
+}
+
+// Similarly create PhysicianGuard and PatientGuard
+
+***************************************************************************
+
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+import { RegisterComponent } from './components/register/register.component';
+import { LoginComponent } from './components/login/login.component';
+import { AdminComponent } from './components/admin/admin.component';
+import { PatientComponent } from './components/patient/patient.component';
+import { PhysicianComponent } from './components/physician/physician.component';
+import { AdminGuard } from './guards/admin.guard';
+import { PatientGuard } from './guards/patient.guard';
+import { PhysicianGuard } from './guards/physician.guard';
+
+const routes: Routes = [
+  { path: 'login', component: LoginComponent },
+  { path: 'register', component: RegisterComponent },
+  { path: 'admin', component: AdminComponent, canActivate: [AdminGuard] },
+  { path: 'patient', component: PatientComponent, canActivate: [PatientGuard] },
+  { path: 'physician', component: PhysicianComponent, canActivate: [PhysicianGuard] },
+  { path: '', redirectTo: 'login', pathMatch: 'full' }
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule]
+})
+export class AppRoutingModule {}
+
+
+************************************************************************************
+
+// src/app/components/login/login.component.ts
+import { Component } from '@angular/core';
+import { AuthService } from '../../services/auth.service';
+import { Router } from '@angular/router';
+
+@Component({
+  selector: 'app-login',
+  templateUrl: './login.component.html'
+})
+export class LoginComponent {
+  email: string = '';
+  password: string = '';
+
+  constructor(private authService: AuthService, private router: Router) {}
+
+  login() {
+    this.authService.login(this.email, this.password).subscribe({
+      next: (response) => {
+        this.authService.saveToken(response);
+
+
+***************************************************************************************
+
+// src/app/services/auth.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthService {
+  private baseUrl = 'http://localhost:8080/api/auth';
+
+  constructor(private http: HttpClient) {}
+
+  login(email: string, password: string): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/login`, { email, password });
+  }
+
+  saveToken(token: string) {
+    localStorage.setItem('jwt', token);
+  }
+
+  getToken() {
+    return localStorage.getItem('jwt');
+  }
+
+  isLoggedIn(): boolean {
+    return this.getToken() !== null;
+  }
+
+  logout() {
+    localStorage.removeItem('jwt');
+  }
+}
+
+
+*****************************************************************************************
+
+<!-- src/app/components/register/register.component.html -->
+<h2>Patient Registration</h2>
+<form (ngSubmit)="register()">
+  <input [(ngModel)]="patient.firstName" name="firstName" placeholder="First Name" required />
+  <input [(ngModel)]="patient.lastName" name="lastName" placeholder="Last Name" required />
+  <input [(ngModel)]="patient.email" name="email" placeholder="Email" required />
+  <input [(ngModel)]="patient.password" name="password" type="password" placeholder="Password" required />
+  <input [(ngModel)]="patient.dateOfBirth" name="dateOfBirth" placeholder="Date of Birth" required />
+  <input [(ngModel)]="patient.phone" name="phone" placeholder="Phone" />
+  <textarea [(ngModel)]="patient.address" name="address" placeholder="Address"></textarea>
+  <button type="submit">Register</button>
+</form>
+
+************************************************************************************************************
+
+// src/app/services/patient.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+export interface Patient {
+  id?: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  dateOfBirth: string;
+  phone: string;
+  address: string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PatientService {
+
+  private baseUrl = 'http://localhost:8080/api/patients';
+
+  constructor(private http: HttpClient) { }
+
+  registerPatient(patient: Patient): Observable<Patient> {
+    return this.http.post<Patient>(`${this.baseUrl}/register`, patient);
+  }
+
+  getPatient(id: number): Observable<Patient> {
+    return this.http.get<Patient>(`${this.baseUrl}/${id}`);
+  }
+
+  updatePatient(id: number, patient: Patient): Observable<Patient> {
+    return this.http.put<Patient>(`${this.baseUrl}/${id}`, patient);
+  }
+
+  deletePatient(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+}
+
+*****************************************************************************************************
+
