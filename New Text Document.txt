@@ -1,0 +1,240 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.example</groupId>
+    <artifactId>patient-physician-api</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <properties>
+        <java.version>17</java.version>
+        <spring-boot.version>3.1.1</spring-boot.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+
+
+spring.datasource.url=jdbc:postgresql://localhost:5432/patient_db
+spring.datasource.username=your_username
+spring.datasource.password=your_password
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+
+package com.example.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+@Entity
+public class Patient {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private String email;
+
+    @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL)
+    private List<Prescription> prescriptions;
+
+    @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL)
+    private List<Allergy> allergies;
+}
+
+package com.example.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+
+@Data
+@Entity
+public class Prescription {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String medication;
+    private String dosage;
+
+    @ManyToOne
+    @JoinColumn(name = "patient_id")
+    private Patient patient;
+}
+
+package com.example.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+
+@Data
+@Entity
+public class Allergy {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    @ManyToOne
+    @JoinColumn(name = "patient_id")
+    private Patient patient;
+}
+
+
+package com.example.repository;
+
+import com.example.entity.Patient;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PatientRepository extends JpaRepository<Patient, Long> {
+}
+
+
+package com.example.repository;
+
+import com.example.entity.Prescription;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface PrescriptionRepository extends JpaRepository<Prescription, Long> {
+}
+
+
+package com.example.repository;
+
+import com.example.entity.Allergy;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface AllergyRepository extends JpaRepository<Allergy, Long> {
+}
+
+
+package com.example.service;
+
+import com.example.entity.Patient;
+import com.example.repository.PatientRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.Optional;
+
+@Service
+public class PatientService {
+    @Autowired
+    private PatientRepository repository;
+
+    public Patient register(Patient patient) {
+        return repository.save(patient);
+    }
+
+    public Optional<Patient> findById(Long id) {
+        return repository.findById(id);
+    }
+}
+
+
+package com.example.service;
+
+import com.example.entity.Allergy;
+import com.example.entity.Patient;
+import com.example.entity.Prescription;
+import com.example.repository.AllergyRepository;
+import com.example.repository.PrescriptionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class PhysicianService {
+    @Autowired
+    private PrescriptionRepository prescriptionRepository;
+
+    @Autowired
+    private AllergyRepository allergyRepository;
+
+    public Prescription addPrescription(Prescription prescription, Patient patient) {
+        prescription.setPatient(patient);
+        return prescriptionRepository.save(prescription);
+    }
+
+    public Allergy addAllergy(Allergy allergy, Patient patient) {
+        allergy.setPatient(patient);
+        return allergyRepository.save(allergy);
+    }
+}
+
+
+package com.example.controller;
+
+import com.example.entity.Patient;
+import com.example.service.PatientService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/patients")
+public class PatientController {
+    @Autowired
+    private PatientService service;
+
+    @PostMapping
+    public Patient register(@RequestBody Patient patient) {
+        return service.register(patient);
+    }
+
+    @GetMapping("/{id}")
+    public Patient getById(@PathVariable Long id) {
+        return service.findById(id).orElseThrow(() -> new RuntimeException("Patient not found"));
+    }
+}
+
+
+package com.example.controller;
+
+import com.example.entity.Allergy;
+import com.example.entity.Patient;
+import com.example.entity.Prescription;
+import com.example.service.PatientService;
+import com.example.service.PhysicianService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/physicians")
+public class PhysicianController {
+    @Autowired
+    private PhysicianService physicianService;
+
+    @Autowired
+    private PatientService patientService;
+
+    @PostMapping("/{patientId}/prescriptions")
+    public Prescription addPrescription(@PathVariable Long patientId, @RequestBody Prescription prescription) {
+        Patient patient = patientService.findById(patientId).orElseThrow(() -> new RuntimeException("Patient not found"));
+        return physicianService.addPrescription(prescription, patient);
+    }
+
+    @PostMapping("/{patientId}/allergies")
+    public Allergy addAllergy(@PathVariable Long patientId, @RequestBody Allergy allergy) {
+        Patient patient = patientService.findById(patientId).orElseThrow(() -> new RuntimeException("Patient not found"));
+        return physicianService.addAllergy(allergy, patient);
+    }
+}
+
