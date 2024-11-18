@@ -645,4 +645,273 @@ public class AdminController {
 
 @RequestMapping("/api/physicians")
 
+///////////////////////////////////////////////////////////////////////////////////////
+ANGULAR code
+
+Step 1: Create an Angular Project
+Install Angular CLI if not already installed:
+bash
+Copy code
+npm install -g @angular/cli
+Create a new Angular project:
+bash
+Copy code
+ng new patient-physician-portal
+cd patient-physician-portal
+Add dependencies for HTTP client and JWT:
+bash
+Copy code
+npm install @auth0/angular-jwt
+Step 2: App Structure
+Organize the app as follows:
+
+Modules: For Auth, Admin, Physician, and Patient.
+Services: For API calls and authentication handling.
+Guards: To protect routes based on roles.
+Step 3: Install Angular JWT
+Install @auth0/angular-jwt to manage token-based authentication:
+
+bash
+Copy code
+npm install @auth0/angular-jwt
+Step 4: Environment Configuration
+src/environments/environment.ts
+
+typescript
+Copy code
+export const environment = {
+  production: false,
+  apiUrl: 'http://localhost:8080/api', // Update with the Spring Boot backend URL
+};
+Step 5: HTTP Interceptor for JWT
+src/app/core/interceptors/auth.interceptor.ts
+
+typescript
+Copy code
+import { Injectable } from '@angular/core';
+import { HttpEvent, HttpHandler, HttpInterceptor, HttpRequest } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    const token = localStorage.getItem('token');
+    if (token) {
+      req = req.clone({
+        setHeaders: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    }
+    return next.handle(req);
+  }
+}
+Step 6: Auth Service
+src/app/core/services/auth.service.ts
+
+typescript
+Copy code
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from 'src/environments/environment';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class AuthService {
+  constructor(private http: HttpClient) {}
+
+  login(username: string, password: string): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/auth/login`, { username, password });
+  }
+
+  register(user: any): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/auth/register`, user);
+  }
+
+  logout(): void {
+    localStorage.removeItem('token');
+  }
+
+  isAuthenticated(): boolean {
+    return !!localStorage.getItem('token');
+  }
+
+  getRole(): string | null {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.role;
+  }
+}
+Step 7: Role Guard
+src/app/core/guards/role.guard.ts
+
+typescript
+Copy code
+import { Injectable } from '@angular/core';
+import { CanActivate, ActivatedRouteSnapshot, Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class RoleGuard implements CanActivate {
+  constructor(private authService: AuthService, private router: Router) {}
+
+  canActivate(route: ActivatedRouteSnapshot): boolean {
+    const expectedRole = route.data['role'];
+    const role = this.authService.getRole();
+
+    if (role && role === expectedRole) {
+      return true;
+    }
+
+    this.router.navigate(['/login']);
+    return false;
+  }
+}
+Step 8: Authentication Module
+src/app/auth/auth.module.ts
+
+typescript
+Copy code
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { LoginComponent } from './login/login.component';
+import { RegisterComponent } from './register/register.component';
+import { ReactiveFormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
+
+@NgModule({
+  declarations: [LoginComponent, RegisterComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterModule.forChild([
+      { path: 'login', component: LoginComponent },
+      { path: 'register', component: RegisterComponent },
+    ]),
+  ],
+})
+export class AuthModule {}
+src/app/auth/login/login.component.ts
+
+typescript
+Copy code
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup } from '@angular/forms';
+import { AuthService } from 'src/app/core/services/auth.service';
+import { Router } from '@angular/router';
+
+@Component({
+  selector: 'app-login',
+  templateUrl: './login.component.html',
+})
+export class LoginComponent {
+  form: FormGroup;
+
+  constructor(private fb: FormBuilder, private authService: AuthService, private router: Router) {
+    this.form = this.fb.group({
+      username: [''],
+      password: [''],
+    });
+  }
+
+  login(): void {
+    const { username, password } = this.form.value;
+    this.authService.login(username, password).subscribe((response) => {
+      localStorage.setItem('token', response.token);
+      this.router.navigate(['/']);
+    });
+  }
+}
+src/app/auth/register/register.component.ts
+
+typescript
+Copy code
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup } from '@angular/forms';
+import { AuthService } from 'src/app/core/services/auth.service';
+import { Router } from '@angular/router';
+
+@Component({
+  selector: 'app-register',
+  templateUrl: './register.component.html',
+})
+export class RegisterComponent {
+  form: FormGroup;
+
+  constructor(private fb: FormBuilder, private authService: AuthService, private router: Router) {
+    this.form = this.fb.group({
+      username: [''],
+      password: [''],
+      role: [''],
+    });
+  }
+
+  register(): void {
+    this.authService.register(this.form.value).subscribe(() => {
+      this.router.navigate(['/login']);
+    });
+  }
+}
+Step 9: Protected Modules for Admin, Physician, and Patient
+Create separate modules for Admin, Physician, and Patient. For example:
+
+src/app/admin/admin.module.ts
+
+typescript
+Copy code
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { AdminComponent } from './admin.component';
+
+@NgModule({
+  declarations: [AdminComponent],
+  imports: [
+    CommonModule,
+    RouterModule.forChild([
+      { path: '', component: AdminComponent, canActivate: [RoleGuard], data: { role: 'ADMIN' } },
+    ]),
+  ],
+})
+export class AdminModule {}
+Step 10: App Routing
+src/app/app-routing.module.ts
+
+typescript
+Copy code
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+
+const routes: Routes = [
+  { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
+  { path: 'auth', loadChildren: () => import('./auth/auth.module').then(m => m.AuthModule) },
+  { path: 'admin', loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule) },
+  { path: 'physicians', loadChildren: () => import('./physicians/physicians.module').then(m => m.PhysiciansModule) },
+  { path: 'patients', loadChildren: () => import('./patients/patients.module').then(m => m.PatientsModule) },
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule],
+})
+export class AppRoutingModule {}
+Step 11: Run the Application
+Run the Angular app using:
+
+bash
+Copy code
+ng serve
+Visit the routes:
+
+/auth/login for login
+/auth/register for registration
+/admin for admin dashboard
+/physicians for physician dashboard
+/patients for patient dashboard
+The backend REST API will validate roles and JWT tokens.
 
